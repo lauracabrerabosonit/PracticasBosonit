@@ -1,0 +1,6 @@
+Capitulo 2 
+a.
+
+strings = spark.read.text("")
+strings.show(10, truncate=False)
+strings.count()
