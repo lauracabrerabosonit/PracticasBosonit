@@ -1,0 +1,47 @@
+-- ¿Qué es CTAS?
+
+Una consulta CREATE TABLE AS SELECT (CTAS) 
+crea una nueva tabla a partir de los resultados de 
+una instrucción SELECT de otra consulta. 
+
+
+--
+create table padron_parquet STORED AS PARQUET AS SELECT * FROM padron_txt;
+select * from padron_parquet limit 5;
+
+CREATE TABLE padron_txt_2 AS Select COD_DISTRITO, trim(DESC_DISTRITO) as DESC_DISTRITO, COD_DIST_BARRIO, trim(DESC_BARRIO) as DESC_BARRIO, COD_BARRIO, COD_DIST_SECCION, COD_SECCION,COD_EDAD_INT,EspanolesHombres, EspanolesMujeres, ExtranjerosHombres, ExtranjerosMujeres,FX_CARGA, FX_DATOS_INI, FX_DATOS_FIN  from padron_txt;
+
+CREATE TABLE padron_parquet_2 STORED AS PARQUET AS SELECT * FROM padron_txt_2;
+
+CREATE TABLE padron_parquet_2 (COD_DISTRITO int, DESC_DISTRITO string, COD_DIST_BARRIO int, DESC_BARRIO int, COD_BARRIO string, COD_DIST_SECCION int, COD_SECCION int, COD_EDAD_INT int, EspanolesHombres int, EspanolesMujeres int, ExtranjerosHombres int, ExtranjerosMujeres int,X_CARGA TIMESTAMP, FX_DATOS_INI date, FX_DATOS_FIN date ) 
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+ "separatorChar" = '\u0059',
+    "quoteChar"     = "\""
+)   STORED AS PARQUET;
+
+LOAD DATA LOCAL INPATH '/user/cloudera/hive/estadisticas202212.csv'  OVERWRITE INTO TABLE padron_parquet_2;
+
+--El formato parquet y otros formatos de columnas manejan una situación común de Hadoop de manera muy eficiente. Es común tener tablas (conjuntos de datos) 
+--que tengan muchas más columnas de las que cabría esperar en una base de datos relacional bien diseñada; cien o doscientas columnas no son inusuales. 
+--Esto es así porque a menudo usamos Hadoop como un lugar para desnormalizar datos de formatos relacionales: sí, obtienes muchos valores repetidos y muchas tablas aplanadas en una sola. 
+--Pero se vuelve mucho más fácil consultar ya que todas las uniones están resueltas. Hay otras ventajas, como la retención de datos del estado en el tiempo. De todos modos, 
+--es común tener un montón de columnas en una tabla.
+
+DESCRIBE FORMATTED padron_parquet;
+hdfs dfs -du -s -h /user/hive/warehouse/datos_padron.db/padron_parquet
+-- RESULTADO > 911.6 K  911.6 K 
+
+DESCRIBE FORMATTED padron_parquet_2;
+hdfs dfs -du -s -h /user/hive/warehouse/datos_padron.db/padron_parquet_2
+-- RESULTADO > 909.6 K  909.6 K
+
+
+DESCRIBE FORMATTED padron_txt;
+hdfs dfs -du -s -h /user/hive/warehouse/datos_padron.db/padron_txt
+-- RESULTADO > 21.6 M  21.6 M
+
+DESCRIBE FORMATTED padron_txt_2;
+hdfs dfs -du -s -h /user/hive/warehouse/datos_padron.db/padron_txt_2
+-- RESULTADO > 11.6 M  11.6 M

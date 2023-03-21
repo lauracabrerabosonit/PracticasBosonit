@@ -1,0 +1,37 @@
+--CREAR TABLAS EN FORMATO TEXTO
+
+CREATE DATABASE datos_padron;
+
+CREATE TABLE padron_txt (COD_DISTRITO int, DESC_DISTRITO string, COD_DIST_BARRIO int, DESC_BARRIO string, COD_BARRIO int, COD_DIST_SECCION int, COD_SECCION int, COD_EDAD_INT int, EspanolesHombres int, EspanolesMujeres int, ExtranjerosHombres int, ExtranjerosMujeres int, FX_CARGA TIMESTAMP, FX_DATOS_INI date, FX_DATOS_FIN date) 
+ROW FORMAT DELIMITED -- 
+FIELDS TERMINATED BY  
+',';
+
+load data inpath  
+'/user/cloudera/hive/estadisticas202212.csv' into table padron_txt;
+select * from padron_txt limit 5;
+
+--Hacer trim para eliminar datos innecesarios
+
+
+CREATE TABLE padron_txt_2 AS Select COD_DISTRITO, trim(DESC_DISTRITO) as DESC_DISTRITO, COD_DIST_BARRIO, trim(DESC_BARRIO) as DESC_BARRIO, COD_BARRIO, COD_DIST_SECCION, COD_SECCION,COD_EDAD_INT,EspanolesHombres, EspanolesMujeres, ExtranjerosHombres, ExtranjerosMujeres,FX_CARGA, FX_DATOS_INI, FX_DATOS_FIN  from padron_txt;
+select * from padron_txt_2 limit 5;
+
+
+--load data sin el local realiza una insercion de los datos desde la propia maquina y fichero, 
+--por otro lado incluyendo local la consola de hive buscara e incluira los datos desde HDFS.
+
+INSERT OVERWRITE TABLE padron_txt 
+SELECT COD_DISTRITO, DESC_DISTRITO, COD_DIST_BARRIO, DESC_BARRIO, COD_BARRIO, COD_DIST_SECCION, COD_SECCION, COD_EDAD_INT, FX_CARGA, FX_DATOS_INI, FX_DATOS_FIN,
+CASE WHEN length(EspanolesHombres) > 0 THEN EspanolesHombres ELSE '0' END AS EspanolesHombres,
+CASE WHEN length(EspanolesMujeres) > 0 THEN EspanolesMujeres ELSE '0' END AS EspanolesMujeres,
+CASE WHEN length(ExtranjerosHombres) > 0 THEN ExtranjerosHombres ELSE '0' END AS ExtranjerosHombres,
+CASE WHEN length(ExtranjerosMujeres) > 0 THEN ExtranjerosMujeres ELSE '0' END AS ExtranjerosMujeres
+FROM padron_txt);
+
+select * from padron_txt limit 5;
+
+create table padron_txt_2 (*) ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
+WITH SERDEPROPERTIES ('input.regex'='^[ '"]+|[ '"]+$|( ){2,}') stored as textfile;
+
+

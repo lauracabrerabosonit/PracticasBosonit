@@ -1,0 +1,9 @@
+/*Mediante una función Pivot muestra una tabla (que va a ser una tabla de contingencia) que contenga los valores totales ()la suma de valores) de espanolesmujeres para cada distrito y en cada rango de edad (COD_EDAD_INT). Los distritos incluidos deben ser únicamente CENTRO, BARAJAS y RETIRO y deben figurar como columnas . El aspecto debe ser similar a este: */
+
+
+select COD_EDAD_INT,DESC_DISTRITO, SUM(espanolesmujeres) as espanolesmujeres 
+from `Rango_Edades_Seccion_202112_csv`
+WHERE DESC_DISTRITO IN ('CENTRO', 'BARAJAS' , 'RETIRO')
+group by COD_EDAD_INT, DESC_DISTRITO
+order by COD_EDAD_INT
+limit 10;

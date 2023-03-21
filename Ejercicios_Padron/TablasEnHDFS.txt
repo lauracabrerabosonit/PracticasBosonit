@@ -1,0 +1,128 @@
+--Crear un directorio HDFS con un nombre a placer, por ejemplo, /test. Si estás en 
+una máquina Cloudera tienes que asegurarte de que el servicio HDFS está activo ya 
+que puede no iniciarse al encender la máquina (puedes hacerlo desde el Cloudera 
+Manager). 
+A su vez, en las máquinas Cloudera es posible (dependiendo de si 
+usamos Hive desde consola o desde Hue) que no tengamos permisos para crear 
+directorios en HDFS salvo en el directorio /user/cloudera.
+
+CREO UN DIRECTORIO HDFS LLAMADO /TEST
+~$hdfs dfs -mkdir test
+
+
+
+
+--Mueve tu fichero datos1 al directorio que has creado en HDFS con un comando 
+desde consola.
+PARA MOVER EL FICHERO DATOS1 A TEST PRIMERO POSICIONO
+DATOS1 EN LA MAQUINA Y ME POSICIONO EN ESA RUTA
+DESPUES HAGO
+
+~$hafdoops fs -put datos1.txt /test
+
+PARA GUARDAR DATOS1 EN TEST
+
+PARA COMPROBAR QUE EFECTIVAMENTE HEMOS CREADO EL DIRECTORIO TEST
+
+~$hdfs dfs -ls
+
+PARA COMRPOBAR QUE EFECTIVAMENTE AHI ESTA DATOS1
+
+~$hdfs dfs -ls /test
+
+
+-- Desde Hive, crea una nueva database por ejemplo con el nombre numeros. Crea
+una tabla que no sea externa y sin argumento location con tres columnas
+numéricas, campos separados por coma y delimitada por filas. La llamaremos por
+ejemplo numeros_tbl.
+
+CREATE TABLE numeros_tbl ( COL1 int, COL2 int, COL3 int)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ',' 
+STORED AS TEXTFILE;
+
+Load data  inpath '/test/datos1.txt' into table numeros_tbl;
+
+
+Carga los datos de nuestro fichero de texto datos1 almacenado en HDFS en la tabla 
+de Hive. Consulta la localización donde estaban anteriormente los datos 
+almacenados. ¿Siguen estando ahí? ¿Dónde están?. Borra la tabla, ¿qué ocurre con 
+los datos almacenados en HDFS
+
+-- el archivo ya no existe en su ruta de hdfs (cortar - pegar), se traslada a nuestra tabla de Hive.
+Si realizamos un drop table los datos desaparecen
+
+
+Vuelve a mover el fichero de texto datos1 desde el almacenamiento local al 
+directorio anterior en HDFS.
+VUELVO A HACER LO ANTERIOR
+
+
+--Desde Hive, crea una tabla externa sin el argumento location. Y carga datos1 (desde 
+HDFS) en ella. ¿A dónde han ido los datos en HDFS? Borra la tabla ¿Qué ocurre con 
+los datos en hdfs?
+
+
+CREATE EXTERNAL TABLE numeros_tbl2 ( COL1 int, COL2 int, COL3 int)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ',' 
+STORED AS TEXTFILE;
+
+Load data  inpath '/test/datos1.txt' into table numeros_tbl2;
+
+
+--ocurre lo mismo que en el caso anterior, los datos son trasladados desde hdfs a hive y 
+posteriormente tras borrar la tabla se eliminan estos. 
+
+-- Borra el fichero datos1 del directorio en el que estén. Vuelve a insertarlos en el
+directorio que creamos inicialmente (/test). Vuelve a crear la tabla numeros desde
+hive pero ahora de manera externa y con un argumento location que haga
+referencia al directorio donde los hayas situado en HDFS (/test). No cargues los
+datos de ninguna manera explícita. Haz una consulta sobre la tabla que acabamos
+de crear que muestre todos los registros. ¿Tiene algún contenido?
+
+CREATE EXTERNAL TABLE numeros_tbl3 ( COL1 int, COL2 int, COL3 int)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ',' 
+STORED AS TEXTFILE
+LOCATION '/test';
+
+select * from numeros_tbl3;
+
+--EFECTIVAMENTE ME SALEN TODOS LOS REGISTROS Y ADEMÁS DATOS1.TXT SIGUE ESTANDO EN EL FICHERO TEST (HDFS)
+
+
+--Inserta el fichero de datos creado al principio, "datos2" en el mismo directorio de 
+HDFS que "datos1". Vuelve a hacer la consulta anterior sobre la misma tabla. ¿Qué 
+salida muestra? 
+
+~$hadoop fs -put datos2.txt /test
+
+
+
+la select muestra los datos1 y datos2 que se encuentran dentro de la ruta de hdfs test
+
+
+
+--Extrae conclusiones de todos estos anteriores apartados.
+
+El comando location resulta mas util si quieres una sincronizacion de una ruta de hdfs con una tabla con hive,
+mientras load no mantiene los archivos en hdfs y solo realiza una carga de los datos, una ventaja es no depender en 
+si del propio hdfs.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

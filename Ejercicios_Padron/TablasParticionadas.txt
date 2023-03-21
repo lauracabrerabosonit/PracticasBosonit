@@ -1,0 +1,115 @@
+-- Crear tabla (Hive) padron_particionado particionada por campos DESC_DISTRITO y
+DESC_BARRIO cuyos datos estén en formato parquet.
+
+CREATE TABLE padron_particionado (DESC_DISTRITO string, COD_DIST_BARRIO string, DESC_BARRIO string, COD_DIST_SECCION string, COD_SECCION string, COD_EDAD_INT string, EspanolesHombres string, EspanolesMujeres string, ExtranjerosHombres string, ExtranjerosMujeres string) 
+partitioned by (COD_DISTRITO string, COD_BARRIO string)
+STORED AS PARQUET;
+
+-- Insertar datos (en cada partición) dinámicamente (con Hive) en la tabla recién
+creada a partir de un select de la tabla padron_parquet_2.
+
+set hive.exec.dynamic.partition=true;
+set hive.exec.dynamic.partition.mode=nonstrict;
+SET hive.exec.max.dynamic.partitions = 10000;
+
+INSERT INTO TABLE padron_particionado PARTITION(COD_DISTRITO, COD_BARRIO)
+SELECT padron_parquet_2.desc_distrito,  padron_parquet_2.cod_dist_barrio,padron_parquet_2.desc_barrio, padron_parquet_2.cod_dist_seccion, padron_parquet_2.cod_seccion,
+padron_parquet_2.cod_edad_int, padron_parquet_2.espanoleshombres, padron_parquet_2.espanolesmujeres, padron_parquet_2.extranjeroshombres, padron_parquet_2.extranjerosmujeres,
+padron_parquet_2.cod_distrito, padron_parquet_2.cod_barrio FROM padron_parquet_2;
+
+-- Hacer invalidate metadata en Impala de la base de datos padron_particionado.
+
+invalidate metadata padron_particionado;
+
+-- Calcular el total de EspanolesHombres, EspanolesMujeres, ExtranjerosHombres y
+ExtranjerosMujeres agrupado por DESC_DISTRITO y DESC_BARRIO para los distritos
+CENTRO, LATINA, CHAMARTIN, TETUAN, VICALVARO y BARAJAS.
+
+SELECT sum(CAST (p.EspanolesHombres AS INT)), sum( CAST(p.espanolesMujeres AS INT)), sum(CAST (p.ExtranjerosHombres AS INT)), sum (CAST (p.extranjerosmujeres AS INT))
+FROM padron_particionado p
+WHERE p.COD_BARRIO IN (SELECT COD_BARRIO FROM padron_particionado where DESC_BARRIO IN ("CENTRO", "LATINA", "CHAMARTIN", "TETUAN", "VICALVARO" , "BARAJAS"))
+GROUP BY p.DESC_DISTRITO, p.DESC_BARRIO ;
+
+Map: 1  Reduce: 1
+HDFS Read: 951042
+Time taken: 46.698 seconds
+
+-- Llevar a cabo la consulta en Hive en las tablas padron_parquet y
+padron_partitionado. ¿Alguna conclusión?
+
+SELECT sum(CAST (p.EspanolesHombres AS INT)), sum( CAST(p.espanolesMujeres AS INT)), sum(CAST (p.ExtranjerosHombres AS INT)), sum (CAST (p.extranjerosmujeres AS INT))
+FROM padron_parquet p
+WHERE p.COD_BARRIO IN (SELECT COD_BARRIO FROM padron_particionado where DESC_BARRIO IN ("CENTRO", "LATINA", "CHAMARTIN", "TETUAN", "VICALVARO" , "BARAJAS"))
+GROUP BY p.DESC_DISTRITO, p.DESC_BARRIO ;
+
+Map: 1  Reduce: 1
+HDFS Read: 740495
+Time taken: 39.184 seconds
+
+La lectura en HDFS es menor para el particionado.
+
+
+-- Llevar a cabo la consulta en Impala en las tablas padron_parquet y
+padron_particionado. ¿Alguna conclusión?
+
+SELECT sum(CAST (p.EspanolesHombres AS INT)), sum( CAST(p.espanolesMujeres AS INT)), sum(CAST (p.ExtranjerosHombres AS INT)), sum (CAST (p.extranjerosmujeres AS INT))
+FROM padron_particionado p
+WHERE p.COD_BARRIO IN (SELECT COD_BARRIO FROM padron_particionado where DESC_BARRIO IN ("CENTRO", "LATINA", "CHAMARTIN", "TETUAN", "VICALVARO" , "BARAJAS"))
+GROUP BY p.DESC_DISTRITO, p.DESC_BARRIO ;
+
+Fetched 0 row(s) in 7.20s
+
+SELECT sum(CAST (p.EspanolesHombres AS INT)), sum( CAST(p.espanolesMujeres AS INT)), sum(CAST (p.ExtranjerosHombres AS INT)), sum (CAST (p.extranjerosmujeres AS INT))
+FROM padron_parquet p
+WHERE p.COD_BARRIO IN (SELECT COD_BARRIO FROM padron_particionado where DESC_BARRIO IN ("CENTRO", "LATINA", "CHAMARTIN", "TETUAN", "VICALVARO" , "BARAJAS"))
+GROUP BY p.DESC_DISTRITO, p.DESC_BARRIO ;
+
+Fetched 0 row(s) in 2.19s
+
+-- Hacer consultas de agregación (Max, Min, Avg, Count) tal cual el ejemplo anterior
+con las 3 tablas (padron_txt_2, padron_parquet_2 y padron_particionado) y
+comparar rendimientos tanto en Hive como en Impala y sacar conclusiones
+
+SELECT Max(CAST (EspanolesHombres AS INT)), Min( CAST(espanolesMujeres AS INT)), Avg(CAST (ExtranjerosHombres AS INT)), Count (CAST (extranjerosmujeres AS INT))
+FROM padron_parquet p
+WHERE p.COD_BARRIO IN (SELECT COD_BARRIO FROM padron_parquet where DESC_BARRIO IN ("CENTRO", "LATINA", "CHAMARTIN", "TETUAN", "VICALVARO" , "BARAJAS"))
+GROUP BY p.DESC_DISTRITO, p.DESC_BARRIO ;
+
+HIVE
+HDFS Read: 699121
+Time taken: 54.421 seconds
+
+IMPALA
+Fetched 0 row(s) in 1.15s
+
+SELECT Max(CAST (EspanolesHombres AS INT)), Min( CAST(espanolesMujeres AS INT)), Avg(CAST (ExtranjerosHombres AS INT)), Count (CAST (extranjerosmujeres AS INT))
+FROM padron_parquet_2 p
+WHERE p.COD_BARRIO IN (SELECT COD_BARRIO FROM padron_parquet_2 where DESC_BARRIO IN ("CENTRO", "LATINA", "CHAMARTIN", "TETUAN", "VICALVARO" , "BARAJAS"))
+GROUP BY p.DESC_DISTRITO, p.DESC_BARRIO ;
+
+HIVE
+HDFS Read: 696906
+Time taken: 37.776 seconds
+
+IMPALA 
+Fetched 0 row(s) in 1.23s
+
+SELECT Max(CAST (EspanolesHombres AS INT)), Min( CAST(espanolesMujeres AS INT)), Avg(CAST (ExtranjerosHombres AS INT)), Count (CAST (extranjerosmujeres AS INT))
+FROM padron_particionado p
+WHERE p.COD_BARRIO IN (SELECT COD_BARRIO FROM padron_particionado where DESC_BARRIO IN ("CENTRO", "LATINA", "CHAMARTIN", "TETUAN", "VICALVARO" , "BARAJAS"))
+GROUP BY p.DESC_DISTRITO, p.DESC_BARRIO ;
+
+HIVE
+HDFS Read: 952099
+Time taken: 47.023 seconds
+
+IMPALA 
+Fetched 0 row(s) in 2.08s
+
+
+
+
+
+
+
+

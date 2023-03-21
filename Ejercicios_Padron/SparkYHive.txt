@@ -1,0 +1,167 @@
+/*Por último, prueba a hacer los ejercicios sugeridos en la parte de Hive con el csv "Datos Padrón" (incluyendo la importación con Regex) utilizando desde Spark EXCLUSIVAMENTE sentencias spark.sql, es decir, importar los archivos desde local directamente como tablas de Hive y haciendo todas las consultas sobre estas tablas sin transformarlas en ningún momento en DataFrames ni DataSets.*/
+
+
+
+DROP TABLE if exists padron_txt;
+
+
+CREATE TABLE padron_txt (COD_DISTRITO int, DESC_DISTRITO string, COD_DIST_BARRIO int, DESC_BARRIO string, COD_BARRIO int, COD_DIST_SECCION int, COD_SECCION int, COD_EDAD_INT int, EspanolesHombres int, EspanolesMujeres int, ExtranjerosHombres int, ExtranjerosMujeres int) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ';'
+STORED AS TEXTFILE;
+
+
+-- Crear una tabla formato parquet , no acepta el delimitador de csv lo que es un incoveniente
+CREATE TABLE padron_txt_parquet (COD_DISTRITO int, DESC_DISTRITO string, COD_DIST_BARRIO int, DESC_BARRIO string, COD_BARRIO int, COD_DIST_SECCION int, COD_SECCION int, COD_EDAD_INT int, EspanolesHombres int, EspanolesMujeres int, ExtranjerosHombres int, ExtranjerosMujeres int) 
+--ROW FORMAT DELIMITED FIELDS TERMINATED BY ';'
+STORED AS PARQUET;
+
+
+-- Crear una tabla formato parquet , no acepta el delimitador de csv lo que es un incoveniente
+--Me da error
+
+CREATE TABLE padron_txt_parquet_prueba (COD_DISTRITO int, DESC_DISTRITO string, COD_DIST_BARRIO int, DESC_BARRIO string, COD_BARRIO int, COD_DIST_SECCION int, COD_SECCION int, COD_EDAD_INT int, EspanolesHombres int, EspanolesMujeres int, ExtranjerosHombres int, ExtranjerosMujeres int) 
+PARTITIONED BY (DESC_DISTRITO)
+STORED AS PARQUET;
+
+LOAD DATA  INPATH '/test/estadisticas202212.csv' OVERWRITE INTO TABLE padron_txt;
+
+
+use default;
+
+INSERT OVERWRITE TABLE padron_txt 
+(SELECT COD_DISTRITO, DESC_DISTRITO, COD_DIST_BARRIO, DESC_BARRIO, COD_BARRIO, COD_DIST_SECCION, COD_SECCION, COD_EDAD_INT, 
+CASE WHEN padron_txt.EspanolesHombres is NULL THEN 0 ELSE padron_txt.EspanolesHombres END AS EspanolesHombres,
+CASE WHEN padron_txt.EspanolesMujeres is NULL THEN 0 ELSE padron_txt.EspanolesHombres END AS EspanolesMujeres,
+CASE WHEN padron_txt.ExtranjerosHombres is NULL THEN 0 ELSE padron_txt.EspanolesHombres END AS ExtranjerosHombres,
+CASE WHEN padron_txt.ExtranjerosMujeres is NULL THEN 0 ELSE padron_txt.EspanolesHombres END AS ExtranjerosMujeres
+FROM padron_txt);
+
+
+CREATE OR REPLACE TABLE padron_txt_delta
+USING delta 
+AS SELECT * FROM padron_txt;
+
+
+/*Crea una nueva columna que muestre el valor 5 para cada uno de los registros de la tabla.*/
+
+ALTER TABLE padron_txt_delta ADD COLUMNS (valor_5 int);
+
+UPDATE padron_txt_delta SET valor_5 = 5;
+
+
+
+/*Crea una nueva columna que muestre la longitud de los campos de la columna DESC_DISTRITO y que se llame "longitud".*/
+
+ALTER TABLE padron_txt_delta ADD COLUMNS (longitud int);
+
+UPDATE padron_txt_delta SET longitud = length(DESC_DISTRITO);
+
+
+-- Borra esta columna.
+
+-- There is no drop column option on Databricks tables.
+-- ALTER TABLE padron_txt_delta DROP COLUMN valor_5;
+
+RESTORE TABLE padron_txt_delta TO VERSION AS OF 1;
+
+/Particiona la tabla delta por las variables DESC_DISTRITO y DESC_BARRIO./
+
+ALTER TABLE padron_txt_delta ADD PARTITION (DESC_DISTRITO, DESC_DISTRITO);
+
+/Crea una nueva columna que muestre la longitud de los campos de la columna DESC_DISTRITO y que se llame "longitud"./
+
+-- LAS TABLAS TEXTFILE NO ACEPTAN UPDATES.
+
+-- UPDATE padron_txt SET longitud = 3 WHERE COD_DISTRITO = 1;
+
+SELECT DESC_BARRIO, DESC_DISTRITO, sum(EspanolesHombres) as EspanolesHombres , sum(EspanolesMujeres) as EspanolesMujeres, sum(ExtranjerosHombres) as ExtranjerosHombres, sum(ExtranjerosMujeres) as ExtranjerosMujeres
+FROM default.padron_txt
+GROUP BY DESC_BARRIO, DESC_DISTRITO
+ORDER BY ExtranjerosMujeres DESC, ExtranjerosHombres DESC
+limit 10 ;
+
+
+
+
+CREATE TABLE padron_txt2 STORED AS TEXTFILE AS SELECT DESC_BARRIO, DESC_DISTRITO, sum(EspanolesHombres) FROM default.padron_txt
+GROUP BY DESC_BARRIO, DESC_DISTRITO;
+
+
+SELECT * 
+FROM padron_txt, padron_txt2
+WHERE padron_txt.DESC_BARRIO = padron_txt2.DESC_BARRIO
+AND padron_txt.DESC_DISTRITO = padron_txt2.DESC_DISTRITO
+limit 10 ;
+
+/*pivot*/
+
+select COD_EDAD_INT,DESC_DISTRITO, SUM(espanolesmujeres) as espanolesmujeres 
+from padron_txt
+WHERE DESC_DISTRITO IN ('CENTRO', 'BARAJAS' , 'RETIRO')
+group by COD_EDAD_INT, DESC_DISTRITO
+order by COD_EDAD_INT
+limit 10;
+
+
+-- pivotDF = df.where( F.col("DESC_DISTRITO").isin('CENTRO', 'BARAJAS' , 'RETIRO')).groupBy("COD_EDAD_INT").pivot("DESC_DISTRITO").sum("espanolesmujeres").orderBy("COD_EDAD_INT")
+
+SELECT COD_EDAD_INT, CENTRO, BARAJAS, RETIRO
+FROM (  SELECT COD_EDAD_INT, DESC_DISTRITO,espanolesmujeres FROM padron_txt )
+pivot  (
+  SUM(espanolesmujeres) FOR DESC_DISTRITO IN('CENTRO' AS CENTRO, 'BARAJAS' AS BARAJAS, 'RETIRO' AS RETIRO)
+
+) 
+ORDER BY COD_EDAD_INT LIMIT 10 ; 
+     
+
+
+/* crea 3 columnas nuevas que hagan referencia a qué porcentaje
+de la suma de "espanolesmujeres" en los tres distritos para cada rango de edad representa
+cada uno de los tres distritos. Debe estar redondeada a 2 decimales*/
+
+SELECT COD_EDAD_INT, CENTRO, BARAJAS, RETIRO, 
+ROUND (( CENTRO / (CENTRO + BARAJAS + RETIRO)) * 100, 2) AS POR_CENTRO, 
+ROUND (( BARAJAS / (CENTRO + BARAJAS + RETIRO)) * 100, 2) AS POR_BARAJAS,
+ROUND (( RETIRO / (CENTRO + BARAJAS + RETIRO)) * 100, 2) AS POR_RETIRO
+FROM (  SELECT COD_EDAD_INT, DESC_DISTRITO,espanolesmujeres FROM padron_txt )
+pivot  (
+  SUM(espanolesmujeres) FOR DESC_DISTRITO IN('CENTRO' AS CENTRO, 'BARAJAS' AS BARAJAS, 'RETIRO' AS RETIRO)
+
+) 
+ORDER BY COD_EDAD_INT LIMIT 10; 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
