@@ -1,0 +1,12 @@
+id producto	cantidad	categoría	precio	Precio_premium	Campo_precio
+1	5	tecnología	21.5	20.02	precio
+2	7	tecnologia	44.365	25.3	Precio_premium
+3	2	libros	10.7	3.15	precio
+4	4	libros	7,61	5.1	precio
+5	4	Oficina	132.97	124.0	Precio_premium
+6	2	tecnología	23	23	precio
+7	1	oficina	11,52	11.52	precio
+8	1	libros	NA	4	Precio_premium
+9	6	escalada	13.23	12.23	precio
+10	3	escalada	35.11	34.01	precio
+11	2	tecnología	4	4	precio
